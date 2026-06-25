@@ -220,7 +220,7 @@ async function seedAurora(): Promise<number> {
       database: AURORA_DATABASE,
       password: token,
       port: 5432,
-      ssl: 'require',
+      ssl: true,
     })
     await client.connect()
 
