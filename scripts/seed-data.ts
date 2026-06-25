@@ -212,7 +212,7 @@ async function seedAurora(): Promise<number> {
       credentials,
     })
 
-    const token = signer.getAuthToken({})
+    const token = await signer.getAuthToken({})
 
     client = new Client({
       host: AURORA_HOST,
