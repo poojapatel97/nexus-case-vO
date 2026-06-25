@@ -6,22 +6,29 @@ import {
 } from '@aws-sdk/lib-dynamodb'
 import { awsCredentialsProvider } from '@vercel/functions/oidc'
 import { v4 as uuidv4 } from 'uuid'
+import { RDS } from '@aws-sdk/client-rds'
+import { Signer } from '@aws-sdk/rds-signer'
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const AURORA_CONFIG = {
-  host: process.env.PGHOST,
-  user: process.env.PGUSER,
-  database: process.env.PGDATABASE,
-  password: process.env.PGPASSWORD,
-  port: 5432,
+const AURORA_HOST = process.env.PGHOST
+const AURORA_USER = process.env.PGUSER
+const AURORA_DATABASE = process.env.PGDATABASE
+const AWS_REGION = process.env.AWS_REGION
+const AWS_ROLE_ARN = process.env.AWS_ROLE_ARN
+
+if (!AURORA_HOST || !AURORA_USER || !AURORA_DATABASE || !AWS_REGION || !AWS_ROLE_ARN) {
+  console.error('[v0] Missing required Aurora or AWS environment variables')
+  console.error('Required:', { AURORA_HOST, AURORA_USER, AURORA_DATABASE, AWS_REGION, AWS_ROLE_ARN })
+  process.exit(1)
 }
 
-const DYNAMODB_CONFIG = {
-  region: process.env.AWS_REGION,
-  roleArn: process.env.AWS_ROLE_ARN,
+const DYNAMODB_TABLE_NAME = process.env.DYNAMODB_TABLE_NAME
+if (!DYNAMODB_TABLE_NAME) {
+  console.error('[v0] Missing DYNAMODB_TABLE_NAME environment variable')
+  process.exit(1)
 }
 
 // ============================================================================
@@ -186,10 +193,37 @@ const generateMockChatMessages = (caseId: string): ChatMessage[] => {
 // ============================================================================
 
 async function seedAurora(): Promise<number> {
-  const client = new Client(AURORA_CONFIG)
+  let client: Client | null = null
 
   try {
-    console.log('[v0] Connecting to Aurora PostgreSQL...')
+    console.log('[v0] Connecting to Aurora PostgreSQL with IAM authentication...')
+
+    // Generate IAM authentication token
+    const credentials = await awsCredentialsProvider({
+      roleArn: AWS_ROLE_ARN,
+      clientConfig: { region: AWS_REGION },
+    })()
+
+    const signer = new Signer({
+      region: AWS_REGION,
+      hostname: AURORA_HOST,
+      port: 5432,
+      username: AURORA_USER,
+      credentials,
+    })
+
+    const token = signer.getAuthorizationHeader({
+      username: AURORA_USER,
+    }).Authorization
+
+    client = new Client({
+      host: AURORA_HOST,
+      user: AURORA_USER,
+      database: AURORA_DATABASE,
+      password: token,
+      port: 5432,
+      ssl: 'require',
+    })
     await client.connect()
 
     console.log('[v0] Checking if data already exists...')
@@ -253,31 +287,29 @@ async function seedAurora(): Promise<number> {
     }
 
     console.log('[v0] Aurora seeding complete!')
-    await client.end()
+    if (client) {
+      await client.end()
+    }
 
     return firstCaseId || 1
   } catch (error) {
     console.error('[v0] Aurora seeding error:', error)
-    await client.end()
+    if (client) {
+      await client.end()
+    }
     throw error
   }
 }
 
 async function seedDynamoDB(caseId: number | string): Promise<void> {
   try {
-    if (!DYNAMODB_CONFIG.region || !DYNAMODB_CONFIG.roleArn) {
-      throw new Error(
-        'Missing AWS_REGION or AWS_ROLE_ARN environment variables',
-      )
-    }
-
     console.log('[v0] Connecting to DynamoDB...')
 
     const dynamoClient = new DynamoDBClient({
-      region: DYNAMODB_CONFIG.region,
+      region: AWS_REGION,
       credentials: awsCredentialsProvider({
-        roleArn: DYNAMODB_CONFIG.roleArn,
-        clientConfig: { region: DYNAMODB_CONFIG.region },
+        roleArn: AWS_ROLE_ARN,
+        clientConfig: { region: AWS_REGION },
       }),
     })
 
@@ -292,7 +324,7 @@ async function seedDynamoDB(caseId: number | string): Promise<void> {
 
     // Batch write in chunks of 25 (DynamoDB limit)
     const chunkSize = 25
-    const tableName = process.env.DYNAMODB_TABLE_NAME
+    const tableName = DYNAMODB_TABLE_NAME
 
     if (!tableName) {
       throw new Error('Missing DYNAMODB_TABLE_NAME environment variable')
