@@ -9,6 +9,14 @@ interface DocumentViewerProps {
   case: Case
 }
 
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString + 'T00:00:00Z')
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  const year = date.getUTCFullYear()
+  return `${month}/${day}/${year}`
+}
+
 export function DocumentViewer({ case: caseData }: DocumentViewerProps) {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(
     caseData.documents.length > 0 ? caseData.documents[0].id : null
@@ -37,7 +45,7 @@ export function DocumentViewer({ case: caseData }: DocumentViewerProps) {
           </div>
           <div className="flex items-center gap-1">
             <Calendar className="h-4 w-4" />
-            <span>Updated {new Date(caseData.lastModified).toLocaleDateString()}</span>
+            <span>Updated {formatDate(caseData.lastModified)}</span>
           </div>
         </div>
       </div>
@@ -85,7 +93,7 @@ export function DocumentViewer({ case: caseData }: DocumentViewerProps) {
                       <span className={`px-2 py-1 rounded ${docTypeColors[selectedDoc.type]}`}>
                         {selectedDoc.type}
                       </span>
-                      <span>Uploaded {new Date(selectedDoc.uploadedDate).toLocaleDateString()}</span>
+                      <span>Uploaded {formatDate(selectedDoc.uploadedDate)}</span>
                     </div>
                   </div>
                 </div>
