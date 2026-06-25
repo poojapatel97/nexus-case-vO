@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "db:seed": "node --import tsx ./scripts/seed-data.ts"
+    "db:seed": "node --env-file-if-exists=/vercel/share/.env.project --import tsx ./scripts/seed-data.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1075.0",
