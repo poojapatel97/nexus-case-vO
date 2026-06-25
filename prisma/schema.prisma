@@ -1,0 +1,126 @@
+// ============================================================================
+// The Nexus Case - Prisma ORM Schema
+// For Amazon Aurora PostgreSQL
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  admin
+  attorney
+  paralegal
+  clerk
+  client
+}
+
+enum CaseStatus {
+  pending
+  active
+  closed
+}
+
+enum CasePriority {
+  low
+  medium
+  high
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+/// Represents a user in the system (attorney, paralegal, admin, etc.)
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255)
+  email     String   @unique @db.VarChar(255)
+  role      UserRole @default(paralegal)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  assignedCases Case[] @relation("AssignedTo")
+  auditLogs     AuditLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([createdAt(sort: Desc)])
+  @@map("users")
+}
+
+/// Represents a legal case managed through the system
+model Case {
+  id          Int         @id @default(autoincrement())
+  title       String      @db.VarChar(255)
+  description String      @db.Text
+  category    String      @db.VarChar(100)
+  status      CaseStatus  @default(pending)
+  priority    CasePriority @default(medium)
+  assignedTo  Int?
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  assignee    User?        @relation("AssignedTo", fields: [assignedTo], references: [id], onDelete: SetNull)
+  documents   Document[]
+  auditLogs   AuditLog[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([assignedTo])
+  @@index([category])
+  @@index([createdAt(sort: Desc)])
+  @@map("cases")
+}
+
+/// Represents a document associated with a case (stored in S3)
+model Document {
+  id          Int      @id @default(autoincrement())
+  caseId      Int      @map("case_id")
+  name        String   @db.VarChar(255)
+  filePathS3  String   @map("file_path_s3") @db.VarChar(500)
+  fileSize    Int
+  uploadedAt  DateTime @default(now()) @map("uploaded_at") @db.Timestamptz()
+
+  // Relations
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([uploadedAt(sort: Desc)])
+  @@map("documents")
+}
+
+/// Audit log for tracking case and document changes
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  caseId     Int?     @map("case_id")
+  userId     Int?     @map("user_id")
+  action     String   @db.VarChar(50)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   Int
+  changes    Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  case       Case?    @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
