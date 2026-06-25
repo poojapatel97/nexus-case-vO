@@ -2,6 +2,7 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb'
+import { awsCredentialsProvider } from '@vercel/functions/oidc'
 import { randomUUID } from 'crypto'
 
 interface SaveChatMessageResponse {
@@ -53,9 +54,24 @@ export async function saveChatMessage(
       }
     }
 
-    // Initialize DynamoDB client with IAM credentials from environment
+    // Initialize DynamoDB client with AWS IAM authentication
+    const region = process.env.AWS_REGION
+    const roleArn = process.env.AWS_ROLE_ARN
+
+    if (!region || !roleArn) {
+      console.error('[v0] AWS_REGION or AWS_ROLE_ARN environment variables not set')
+      return {
+        success: false,
+        error: 'Database configuration error: AWS credentials not configured',
+      }
+    }
+
     const client = new DynamoDBClient({
-      region: process.env.AWS_REGION || 'us-east-1',
+      region,
+      credentials: awsCredentialsProvider({
+        roleArn,
+        clientConfig: { region },
+      }),
     })
 
     const docClient = DynamoDBDocumentClient.from(client, {
