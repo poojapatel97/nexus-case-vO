@@ -266,13 +266,12 @@ async function seedAurora(): Promise<number> {
     for (let i = 0; i < casesData.length; i++) {
       const caseData = casesData[i]
       const result = await client.query(
-        `INSERT INTO cases (title, description, category, status, priority, assigned_to)
+        `INSERT INTO cases (title, description, status, priority, assigned_to)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id`,
         [
           caseData.title,
           caseData.description,
-          caseData.category,
           caseData.status,
           caseData.priority,
           caseData.assigned_to,

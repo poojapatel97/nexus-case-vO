@@ -21,11 +21,7 @@ interface ChatMessage {
 }
 
 /**
- * Saves a Gemini Copilot chat message to DynamoDB
- * @param caseId - The case ID associated with the chat message
- * @param sender - Either 'user' or 'gemini'
- * @param message - The chat message content
- * @returns Success flag, chatId, and timestamp for immediate UI updates
+ * Saves a Gemini Copilot chat message to DynamoDB using Vercel Marketplace prefixed keys
  */
 export async function saveChatMessage(
   caseId: string,
@@ -44,28 +40,28 @@ export async function saveChatMessage(
       return { success: false, error: 'message cannot be empty' }
     }
 
-    // Get table name from environment
-    const tableName = process.env.DYNAMODB_TABLE_NAME
+    // Map the Vercel Marketplace Integration specific environment variables
+    const tableName = process.env.AWS_DYNAMODB_DYNAMODB_TABLE_NAME
+    const region = process.env.AWS_DYNAMODB_AWS_REGION
+    const roleArn = process.env.AWS_DYNAMODB_AWS_ROLE_ARN
+
     if (!tableName) {
-      console.error('[v0] DYNAMODB_TABLE_NAME environment variable not set')
+      console.error('[v0] AWS_DYNAMODB_DYNAMODB_TABLE_NAME environment variable not set')
       return {
         success: false,
         error: 'Database configuration error: table name not set',
       }
     }
 
-    // Initialize DynamoDB client with AWS IAM authentication
-    const region = process.env.AWS_REGION
-    const roleArn = process.env.AWS_ROLE_ARN
-
     if (!region || !roleArn) {
-      console.error('[v0] AWS_REGION or AWS_ROLE_ARN environment variables not set')
+      console.error('[v0] AWS_DYNAMODB_AWS_REGION or AWS_DYNAMODB_AWS_ROLE_ARN environment variables not set')
       return {
         success: false,
         error: 'Database configuration error: AWS credentials not configured',
       }
     }
 
+    // Initialize DynamoDB client with the OIDC role federation
     const client = new DynamoDBClient({
       region,
       credentials: awsCredentialsProvider({
@@ -80,11 +76,10 @@ export async function saveChatMessage(
       },
     })
 
-    // Generate unique IDs and timestamps
+    // Generate unique partition keys and timestamps matching your table structure
     const chatId = randomUUID()
     const timestamp = new Date().toISOString()
 
-    // Prepare the chat message item
     const chatMessage: ChatMessage = {
       chatId,
       timestamp,
@@ -93,7 +88,7 @@ export async function saveChatMessage(
       message: message.trim(),
     }
 
-    // Execute PutCommand to write to DynamoDB
+    // Execute PutCommand to write the item live
     const command = new PutCommand({
       TableName: tableName,
       Item: chatMessage,
@@ -101,7 +96,7 @@ export async function saveChatMessage(
 
     await docClient.send(command)
 
-    console.log(`[v0] Chat message saved: chatId=${chatId}, caseId=${caseId}, sender=${sender}`)
+    console.log(`[v0] Chat message saved successfully: chatId=${chatId}, caseId=${caseId}`)
 
     return {
       success: true,
