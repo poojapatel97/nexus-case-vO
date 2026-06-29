@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "db:setup": "node --env-file-if-exists=/vercel/share/.env.project --import tsx ./scripts/setup-dynamodb.ts",
+    "db:test": "node --env-file-if-exists=/vercel/share/.env.project --import tsx ./scripts/test-dynamodb-connection.ts",
     "db:seed": "node --env-file-if-exists=/vercel/share/.env.project --import tsx ./scripts/seed-data.ts"
   },
   "dependencies": {
